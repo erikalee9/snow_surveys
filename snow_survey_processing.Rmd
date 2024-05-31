@@ -71,8 +71,7 @@ geode_final <- geode_sf %>%
 ### Monthly Data - Transitional Burned/Unburned
 
 ```{r}
-#read in january data 
-## read in csv from snow survey by month, get Date, select and rename columns
+#read in burned data and seperate into depths and pit measurements
 trans_b_depth <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx") %>%
   select(1:7) %>%
   mutate(date = ymd(date, tz = 'MST'))
@@ -105,7 +104,9 @@ trans_b_swe_avg <- trans_b_swe %>%
   mutate(avg_dens_tube = mean(c(density1_gcm3, density2_gcm3, density3_gcm3))) %>%
   mutate(avg_swe_tube = mean(c(swe1_cm...13, swe2_cm...18, swe3_cm...23))) %>%
   mutate(avg_dens_wedge = mean(c(wedge1_density_gcm3, wedge2_density_gcm3, wedge3_density_gcm3, wedge4_density_gcm3, wedge5_density_gcm3, wedge6_density_gcm3, wedge7_density_gcm3))) %>%
-  mutate(avg_swe_wedge = mean(c(swe1_cm...30, swe2_cm...36, swe3_cm...42, swe3_cm...42, swe5_cm, swe6_cm, swe7_cm)))
+  mutate(avg_swe_wedge = mean(c(swe1_cm...30, swe2_cm...36, swe3_cm...42, swe3_cm...42, swe5_cm, swe6_cm, swe7_cm))) %>%
+  #selecting just the averages
+    select(1:3, avg_depth_cm, avg_dens_tube, avg_swe_tube, avg_dens_wedge, avg_swe_wedge)
   
 #get rid of stuff we don't care about right now
 all_trans_b_sum <- trans_b_swe_avg %>%
@@ -116,8 +117,7 @@ trans_b_temp <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx", sheet = "te
 ```
 
 ```{r}
-#read in january data 
-## read in csv from snow survey by month, get Date, select and rename columns
+#read in ub data and seperate into depths and pit measurements
 trans_ub_depth <- read_excel("nsf/nsf_snow_transects/trans_ub_ag.xlsx") %>%
   select(1:7) %>%
   mutate(date = ymd(date, tz = 'MST'))
@@ -149,7 +149,9 @@ trans_ub_swe_avg <- trans_ub_swe %>%
   mutate(avg_dens_tube = mean(c(density1_gcm3, density2_gcm3, density3_gcm3))) %>%
   mutate(avg_swe_tube = mean(c(swe1_cm...13, swe2_cm...18, swe3_cm...23))) %>%
   mutate(avg_dens_wedge = mean(c(wedge1_density_gcm3, wedge2_density_gcm3, wedge3_density_gcm3, wedge4_density_gcm3, wedge5_density_gcm3, wedge6_density_gcm3))) %>%
-  mutate(avg_swe_wedge = mean(c(swe1_cm...30, swe2_cm...36, swe3_cm...42, swe3_cm...42, swe5_cm, swe6_cm)))
+  mutate(avg_swe_wedge = mean(c(swe1_cm...30, swe2_cm...36, swe3_cm...42, swe3_cm...42, swe5_cm, swe6_cm))) %>%
+  #selecting just the averages
+  select(1:3, avg_depth_cm, avg_dens_tube, avg_swe_tube, avg_dens_wedge, avg_swe_wedge)
   
 #get rid of stuff we don't care about right now
 all_trans_ub_sum <- trans_ub_swe_avg %>%
@@ -162,33 +164,71 @@ trans_ub_temp <- read_excel("nsf/nsf_snow_transects/trans_ub_ag.xlsx", sheet = "
 ```{r}
 #joining trans_b and trans_ub dataframes
 all_trans_depths <- trans_b_depth %>%
-  full_join(trans_ub_depth)
+  full_join(trans_ub_depth) %>%
+  #adding a burn column with burn status
+  mutate(burn = case_when(
+    str_detect(point_name, fixed("ag", ignore_case = TRUE)) ~ "unburned",
+    str_detect(point_name, fixed("ab", ignore_case = TRUE)) ~ "burned",
+    TRUE ~ NA_character_  # Add a default value if needed
+  )) %>%
+  select(point_name, date, burn, everything())
 
 avg_all_trans_depths <- trans_b_depths_avg %>%
-  full_join(trans_ub_depths_avg)
+  full_join(trans_ub_depths_avg) %>%
+    mutate(burn = case_when(
+    str_detect(point_name, fixed("ag", ignore_case = TRUE)) ~ "unburned",
+    str_detect(point_name, fixed("ab", ignore_case = TRUE)) ~ "burned",
+    TRUE ~ NA_character_  # Add a default value if needed
+  )) %>%
+  select(point_name, date, burn, everything())
+
+all_trans_swe <- trans_b_swe %>%
+  full_join(trans_ub_swe) %>%
+  mutate(burn = case_when(
+  str_detect(point_name, fixed("ag", ignore_case = TRUE)) ~ "unburned",
+  str_detect(point_name, fixed("ab", ignore_case = TRUE)) ~ "burned",
+  TRUE ~ NA_character_  # Add a default value if needed
+  )) %>%
+  select(point_name, date, burn, everything())
 
 avg_all_trans_swe <- trans_b_swe_avg %>%
-  full_join(trans_ub_swe_avg)
+  full_join(trans_ub_swe_avg) %>%
+    mutate(burn = case_when(
+    str_detect(point_name, fixed("ag", ignore_case = TRUE)) ~ "unburned",
+    str_detect(point_name, fixed("ab", ignore_case = TRUE)) ~ "burned",
+    TRUE ~ NA_character_  # Add a default value if needed
+  )) %>%
+  select(point_name, date, burn, everything())
 
 all_trans_temps <- trans_b_temp %>%
-  full_join(trans_ub_temp)
+  full_join(trans_ub_temp) %>%
+    mutate(burn = case_when(
+    str_detect(point_name, fixed("ag", ignore_case = TRUE)) ~ "unburned",
+    str_detect(point_name, fixed("ab", ignore_case = TRUE)) ~ "burned",
+    TRUE ~ NA_character_  # Add a default value if needed
+  )) %>%
+  select(point_name, date, burn, everything())
 ```
 
 ```{r}
-# don't use x and y in this df bc it is NOT from the geode
+# monthly data for burned and unburned combined
+## don't use x and y in this df bc it is NOT from the geode
 dec_2023_depth <- all_trans_depths %>%
   filter(date =="2023-12-19")
 
-dec_2023_pit <- trans_b_swe %>%
+dec_2023_pit <- all_trans_swe %>%
   filter(date =="2023-12-19") %>%
-  select(-c(13:68))
+  select(c(1:14)) 
 #no wedge as this measurement was not taken in december
 #did not add pit temps to this, as they are in long format
 
-jan_2024_depth <- trans_b_depth %>%
+jan_2024_depth <- all_trans_depths %>%
   filter (date =="2024-01-19")
 
-jan_2024_pit <- trans_b_swe %>%
+jan_2024_pit <- all_trans_swe %>%
+  filter(date == "2024-01-19")
+
+avg_jan_2024_pit <- avg_all_trans_swe %>%
   filter(date == "2024-01-19")
 
 jan_all <- left_join(jan_2024_depth, geode_all, by = "id")
@@ -199,18 +239,86 @@ feb_2024_depth <- trans_b_depth %>%
 feb_2024_pit <- trans_b_swe %>%
   filter(date == "2024-02-19")
 
+avg_feb_2024_pit <- avg_all_trans_swe %>%
+  filter( date =="2024-02-19")
+
 march_2024_depth <- trans_b_depth %>%
   filter (date =="2024-03-20")
 
 march_2024_pit <- trans_b_depth %>%
   filter (date =="2024-03-20")
 
+avg_march_2024_pit <- avg_all_trans_swe %>%
+  filter( date =="2024-03-20")
+
 april_2024_depth <- trans_b_depth %>%
   filter (date =="2024-04-19")
 
 april_2024_pit <- trans_b_depth %>%
   filter (date =="2024-04-19")
+
+avg_april_2024_pit <- avg_all_trans_swe %>%
+  filter( date =="2024-04-19")
 ```
 
-```{}
+### Plots
+
+```{r}
+## TRANS - look at variability in depth
+
+plot_all_trans_d <- ggplot(avg_all_trans_depths, aes(x = date)) +
+  geom_point(aes(y = avg_depth_cm, color = burn), size = 5) + 
+  ggtitle("Transitional") +
+  labs(x = "Date", y = "Average Depth (cm)")
+
+# Print the plot
+ggplotly(plot_all_trans_d)
+
+
+## TRANS - looking at variability in swe
+
+# Create the plot with combined geom_point
+plot_all_trans_swe <- ggplot(avg_all_trans_swe, aes(x = date)) +
+  geom_point(aes(y = avg_swe_tube, color = "avg_swe_tube", shape = point_name), size = 5) +
+  geom_point(aes(y = avg_swe_wedge, color = "avg_swe_wedge", shape = point_name), size = 5) +
+  ggtitle("Transitional") +
+  labs(x = "Date", y = "Average SWE (cm)")
+
+# Print the plot
+ggplotly(plot_all_trans_swe)
+
+
+## trans depth by month facet
+PLOT = "depth_monthfacet_trans"
+ggplot(all_trans_sum, aes(x=id, y=avg_depth_cm, color=burn, shape=aspect_dir)) +
+  geom_point(size=5) +
+  ggtitle("transitional") + 
+  facet_wrap(~month)
+
+ggsave(paste(PLOT,".png",sep=""), width = PlotWidth, height = PlotHeight)
+
+## trans swe by month facet
+PLOT = "swe_monthfacet_trans"
+ggplot(all_trans_sum, aes(x=id, y=swe, color=burn, shape=aspect_dir)) +
+  geom_point(size=5) +
+  ggtitle("transitional") + 
+  facet_wrap(~month)
+
+ggsave(paste(PLOT,".png",sep=""), width = PlotWidth, height = PlotHeight)
+
+#boxplots of burned vs unburned by month
+PLOT = "trans_depth_boxplot"
+ggplot(all_trans_sum, aes(x=as.factor(month), y=avg_depth_cm, fill=burn)) +
+  geom_boxplot() + 
+  ggtitle("transitional")
+
+ggsave(paste(PLOT,".png",sep=""), width = PlotWidth, height = PlotHeight)
+
+PLOT = "trans_swe_boxplot"
+ggplot(all_trans_sum, aes(x=as.factor(month), y=swe, fill=burn)) +
+  geom_boxplot() +
+  ggtitle("transitional")
+
+ggsave(paste(PLOT,".png",sep=""), width = PlotWidth, height = PlotHeight)
+
 ```
