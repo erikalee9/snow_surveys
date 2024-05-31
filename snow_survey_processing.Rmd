@@ -68,7 +68,7 @@ geode_final <- geode_sf %>%
   as.data.frame()
 ```
 
-Monthly Data - Transitional Burned
+### Monthly Data - Transitional Burned/Unburned
 
 ```{r}
 #read in january data 
@@ -93,6 +93,7 @@ trans_b_swe <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx", sheet = "swe
 #this is wedge and swe tube combined
 #still need to get time column to be accurate without a weird date
 
+#average swe for both swe tube and wedges
 trans_b_swe_avg <- trans_b_swe %>%
   rowwise() %>%
   mutate(avg_depth_cm = mean(c(depth1_cm,
@@ -105,21 +106,77 @@ trans_b_swe_avg <- trans_b_swe %>%
   mutate(avg_swe_tube = mean(c(swe1_cm...13, swe2_cm...18, swe3_cm...23))) %>%
   mutate(avg_dens_wedge = mean(c(wedge1_density_gcm3, wedge2_density_gcm3, wedge3_density_gcm3, wedge4_density_gcm3, wedge5_density_gcm3, wedge6_density_gcm3, wedge7_density_gcm3))) %>%
   mutate(avg_swe_wedge = mean(c(swe1_cm...30, swe2_cm...36, swe3_cm...42, swe3_cm...42, swe5_cm, swe6_cm, swe7_cm)))
-
-## can't get the avg_wedge to work because some dates only have a few and others have more... can I omit NAs then get it to work? 
   
 #get rid of stuff we don't care about right now
-all_trans_sum <- trans_b_swe_avg %>%
+all_trans_b_sum <- trans_b_swe_avg %>%
   select(point_name, date, avg_depth_cm, avg_dens_tube, avg_swe_tube, avg_dens_wedge, avg_swe_wedge)
-
 
 trans_b_temp <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx", sheet = "temp") %>%
   mutate(date = ymd(date, tz = 'MST'))
 ```
 
 ```{r}
+#read in january data 
+## read in csv from snow survey by month, get Date, select and rename columns
+trans_ub_depth <- read_excel("nsf/nsf_snow_transects/trans_ub_ag.xlsx") %>%
+  select(1:7) %>%
+  mutate(date = ymd(date, tz = 'MST'))
+
+## average across for depths by point id
+trans_ub_depths_avg <- trans_ub_depth %>%
+  rowwise() %>%
+  mutate(avg_depth_cm = mean(c(depth_1_cm,
+                               depth_2_cm,
+                               depth_3_cm,
+                               depth_4_cm,
+                               depth_5_cm),
+                             na.rm=T)) %>%
+  select(-c(3:7))
+
+trans_ub_swe <- read_excel("nsf/nsf_snow_transects/trans_ub_ag.xlsx", sheet = "swe") %>%
+  mutate(date = ymd(date, tz = 'MST'))
+#this is wedge and swe tube combined
+#still need to get time column to be accurate without a weird date
+
+#average swe for both swe tube and wedges
+trans_ub_swe_avg <- trans_ub_swe %>%
+  rowwise() %>%
+  mutate(avg_depth_cm = mean(c(depth1_cm,
+                               depth2_cm, depth3_cm,
+                               depth4_cm,
+                               depth5_cm),
+                             na.rm=T)) %>%
+  mutate(avg_dens_tube = mean(c(density1_gcm3, density2_gcm3, density3_gcm3))) %>%
+  mutate(avg_swe_tube = mean(c(swe1_cm...13, swe2_cm...18, swe3_cm...23))) %>%
+  mutate(avg_dens_wedge = mean(c(wedge1_density_gcm3, wedge2_density_gcm3, wedge3_density_gcm3, wedge4_density_gcm3, wedge5_density_gcm3, wedge6_density_gcm3))) %>%
+  mutate(avg_swe_wedge = mean(c(swe1_cm...30, swe2_cm...36, swe3_cm...42, swe3_cm...42, swe5_cm, swe6_cm)))
+  
+#get rid of stuff we don't care about right now
+all_trans_ub_sum <- trans_ub_swe_avg %>%
+  select(point_name, date, avg_depth_cm, avg_dens_tube, avg_swe_tube, avg_dens_wedge, avg_swe_wedge)
+
+trans_ub_temp <- read_excel("nsf/nsf_snow_transects/trans_ub_ag.xlsx", sheet = "temp") %>%
+  mutate(date = ymd(date, tz = 'MST'))
+```
+
+```{r}
+#joining trans_b and trans_ub dataframes
+all_trans_depths <- trans_b_depth %>%
+  full_join(trans_ub_depth)
+
+avg_all_trans_depths <- trans_b_depths_avg %>%
+  full_join(trans_ub_depths_avg)
+
+avg_all_trans_swe <- trans_b_swe_avg %>%
+  full_join(trans_ub_swe_avg)
+
+all_trans_temps <- trans_b_temp %>%
+  full_join(trans_ub_temp)
+```
+
+```{r}
 # don't use x and y in this df bc it is NOT from the geode
-dec_2023_depth <- trans_b_depth %>%
+dec_2023_depth <- all_trans_depths %>%
   filter(date =="2023-12-19")
 
 dec_2023_pit <- trans_b_swe %>%
@@ -153,4 +210,7 @@ april_2024_depth <- trans_b_depth %>%
 
 april_2024_pit <- trans_b_depth %>%
   filter (date =="2024-04-19")
+```
+
+```{}
 ```
