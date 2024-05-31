@@ -1,0 +1,156 @@
+---
+title: "snow_surveys"
+author: "Erika Lee"
+date: "2024-05-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+2023-24 Snow Survey Processing
+
+```{r}
+#packages
+library(tidyverse)
+library(lubridate)
+library(plotly)
+library(ggplot2)
+library(stringr)
+library(readxl)
+library(rstatix)
+library(sf)
+library(terra)
+
+setwd("/Volumes/wcnr-network/Research/Kampf/Private/field_data")
+```
+
+```{r}
+## Plot size
+PlotWidth = 16.5
+PlotHeight = 9
+```
+
+```{r}
+## read in geode data - this will be the same every survey
+geode_all <- read_excel("nsf/nsf_snow_transects/nsf_geode_snowtransect_points.xlsx") %>%
+  mutate(point_name = name) %>%
+  select(point_name, everything()) %>%
+  select(-c(name, notes))
+```
+
+Creating a spatial dataset - \*\* need to work on this part still!
+
+```{r}
+#converting geode points to spatial object
+geode_sf <- geode_all %>%
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+# Create a blank raster template
+ext <- st_bbox(geode_sf)
+res <- 100 # resolution of the raster
+rast <- rast(xmin = ext["xmin"], xmax = ext["xmax"], ymin = ext["ymin"], ymax = ext["ymax"], 
+             resolution = res, crs = st_crs(geode_sf)$wkt)
+
+# Interpolate the elevation data
+#gps_raster <- rasterize(geode_sf, rast, field = "elev_m", fun = mean)
+
+#Calculate the aspect using the terrain function from the terra package
+#aspect_raster <- terrain(gps_raster, v = "aspect", unit = "degrees")
+
+#extract aspect for each point
+#geode_sf$aspect <- extract(aspect_raster, geode_sf)
+
+#convert back to a dataframe for further data manipulation
+geode_final <- geode_sf %>%
+  st_drop_geometry() %>%
+  as.data.frame()
+```
+
+Monthly Data - Transitional Burned
+
+```{r}
+#read in january data 
+## read in csv from snow survey by month, get Date, select and rename columns
+trans_b_depth <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx") %>%
+  select(1:7) %>%
+  mutate(date = ymd(date, tz = 'MST'))
+
+## average across for depths by point id
+trans_b_depths_avg <- trans_b_depth %>%
+  rowwise() %>%
+  mutate(avg_depth_cm = mean(c(depth_1_cm,
+                               depth_2_cm,
+                               depth_3_cm,
+                               depth_4_cm,
+                               depth_5_cm),
+                             na.rm=T)) %>%
+  select(-c(3:7))
+
+trans_b_swe <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx", sheet = "swe") %>%
+  mutate(date = ymd(date, tz = 'MST'))
+#this is wedge and swe tube combined
+#still need to get time column to be accurate without a weird date
+
+trans_b_swe_avg <- trans_b_swe %>%
+  rowwise() %>%
+  mutate(avg_depth_cm = mean(c(depth1_cm,
+                               depth2_cm,
+                               depth3_cm,
+                               depth4_cm,
+                               depth5_cm),
+                             na.rm=T)) %>%
+  mutate(avg_dens_tube = mean(c(density1_gcm3, density2_gcm3, density3_gcm3))) %>%
+  mutate(avg_swe_tube = mean(c(swe1_cm...13, swe2_cm...18, swe3_cm...23))) %>%
+  mutate(avg_dens_wedge = mean(c(wedge1_density_gcm3, wedge2_density_gcm3, wedge3_density_gcm3, wedge4_density_gcm3, wedge5_density_gcm3, wedge6_density_gcm3, wedge7_density_gcm3))) %>%
+  mutate(avg_swe_wedge = mean(c(swe1_cm...30, swe2_cm...36, swe3_cm...42, swe3_cm...42, swe5_cm, swe6_cm, swe7_cm)))
+
+## can't get the avg_wedge to work because some dates only have a few and others have more... can I omit NAs then get it to work? 
+  
+#get rid of stuff we don't care about right now
+all_trans_sum <- trans_b_swe_avg %>%
+  select(point_name, date, avg_depth_cm, avg_dens_tube, avg_swe_tube, avg_dens_wedge, avg_swe_wedge)
+
+
+trans_b_temp <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx", sheet = "temp") %>%
+  mutate(date = ymd(date, tz = 'MST'))
+```
+
+```{r}
+# don't use x and y in this df bc it is NOT from the geode
+dec_2023_depth <- trans_b_depth %>%
+  filter(date =="2023-12-19")
+
+dec_2023_pit <- trans_b_swe %>%
+  filter(date =="2023-12-19") %>%
+  select(-c(13:68))
+#no wedge as this measurement was not taken in december
+#did not add pit temps to this, as they are in long format
+
+jan_2024_depth <- trans_b_depth %>%
+  filter (date =="2024-01-19")
+
+jan_2024_pit <- trans_b_swe %>%
+  filter(date == "2024-01-19")
+
+jan_all <- left_join(jan_2024_depth, geode_all, by = "id")
+
+feb_2024_depth <- trans_b_depth %>%
+  filter (date =="2024-02-19")
+
+feb_2024_pit <- trans_b_swe %>%
+  filter(date == "2024-02-19")
+
+march_2024_depth <- trans_b_depth %>%
+  filter (date =="2024-03-20")
+
+march_2024_pit <- trans_b_depth %>%
+  filter (date =="2024-03-20")
+
+april_2024_depth <- trans_b_depth %>%
+  filter (date =="2024-04-19")
+
+april_2024_pit <- trans_b_depth %>%
+  filter (date =="2024-04-19")
+```
