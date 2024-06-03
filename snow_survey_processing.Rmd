@@ -22,6 +22,7 @@ library(readxl)
 library(rstatix)
 library(sf)
 library(terra)
+library(dplyr)
 
 setwd("/Volumes/wcnr-network/Research/Kampf/Private/field_data")
 ```
@@ -43,29 +44,84 @@ geode_all <- read_excel("nsf/nsf_snow_transects/nsf_geode_snowtransect_points.xl
 Creating a spatial dataset - \*\* need to work on this part still!
 
 ```{r}
-#converting geode points to spatial object
+# Converting geode points to spatial object
 geode_sf <- geode_all %>%
   st_as_sf(coords = c("long", "lat"), crs = 4326)
 
+# Reproject to a suitable UTM zone (example: UTM zone 33N)
+# Adjust the EPSG code according to your specific area
+utm_crs <- st_crs("+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs")
+geode_sf <- st_transform(geode_sf, crs = utm_crs)
+
+# Ensure the elev_m column exists and contains numeric values
+if (!"elev_m" %in% names(geode_sf)) {
+  stop("The 'elev_m' column does not exist in geode_sf.")
+}
+if (!is.numeric(geode_sf$elev_m)) {
+  stop("The 'elev_m' column is not numeric.")
+}
+if (any(is.na(geode_sf$elev_m))) {
+  stop("The 'elev_m' column contains NA values.")
+}
+
+# Print summary of geode_sf to verify coordinates and elevation data
+print(st_geometry_type(geode_sf))
+print(st_crs(geode_sf))
+print(summary(geode_sf$elev_m))
+
 # Create a blank raster template
 ext <- st_bbox(geode_sf)
-res <- 100 # resolution of the raster
+res <- 5 # resolution of the raster in meters
+
+# Create a raster with the given extent and resolution
 rast <- rast(xmin = ext["xmin"], xmax = ext["xmax"], ymin = ext["ymin"], ymax = ext["ymax"], 
-             resolution = res, crs = st_crs(geode_sf)$wkt)
+             res = res, crs = st_crs(geode_sf)$wkt)
+
+# Print details of the raster to verify its creation
+print(rast)
 
 # Interpolate the elevation data
-#gps_raster <- rasterize(geode_sf, rast, field = "elev_m", fun = mean)
+gps_raster <- rasterize(geode_sf, rast, field = "elev_m", fun = mean)
 
-#Calculate the aspect using the terrain function from the terra package
-#aspect_raster <- terrain(gps_raster, v = "aspect", unit = "degrees")
+# Check if gps_raster has values
+if (all(is.na(values(gps_raster)))) {
+  print("gps_raster contains only NA values. Check the rasterization step.")
+  print(gps_raster)
+  stop("gps_raster contains only NA values.")
+} else {
+  print("gps_raster successfully created with values.")
+  print(gps_raster)
+}
 
-#extract aspect for each point
-#geode_sf$aspect <- extract(aspect_raster, geode_sf)
+# Plot the gps_raster to visually check the values
+plot(gps_raster, main = "GPS Raster with Elevation Data")
 
-#convert back to a dataframe for further data manipulation
+# Calculate the aspect using the terrain function from the terra package
+aspect_raster <- terrain(gps_raster, v = "aspect", unit = "degrees")
+
+# Check if aspect_raster has values
+if (all(is.na(values(aspect_raster)))) {
+  print("aspect_raster contains only NA values. Check the terrain calculation step.")
+  print(aspect_raster)
+  stop("aspect_raster contains only NA values.")
+} else {
+  print("aspect_raster successfully created with values.")
+  print(aspect_raster)
+}
+
+# Plot the aspect_raster to visually check the values
+plot(aspect_raster, main = "Aspect Raster")
+
+# Extract aspect for each point
+geode_sf$aspect <- extract(aspect_raster, geode_sf)
+
+# Convert back to a dataframe for further data manipulation
 geode_final <- geode_sf %>%
   st_drop_geometry() %>%
   as.data.frame()
+
+# Print the final dataframe
+print(head(geode_final))
 ```
 
 ### Monthly Data - Transitional Burned/Unburned
