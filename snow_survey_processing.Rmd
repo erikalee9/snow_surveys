@@ -23,6 +23,7 @@ library(rstatix)
 library(sf)
 library(terra)
 library(dplyr)
+library(readr)
 
 setwd("/Volumes/wcnr-network/Research/Kampf/Private/field_data")
 ```
@@ -130,7 +131,7 @@ print(head(geode_final))
 #read in burned data and seperate into depths and pit measurements
 trans_b_depth <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx") %>%
   select(1:7) %>%
-  mutate(date = ymd(date, tz = 'MST'))
+ mutate(date = format(as_date(date), "%Y-%m-%d"))
 
 ## average across for depths by point id
 trans_b_depths_avg <- trans_b_depth %>%
@@ -144,7 +145,7 @@ trans_b_depths_avg <- trans_b_depth %>%
   select(-c(3:7))
 
 trans_b_swe <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx", sheet = "swe") %>%
-  mutate(date = ymd(date, tz = 'MST'))
+  mutate(date = format(as_date(date), "%Y-%m-%d"))
 #this is wedge and swe tube combined
 #still need to get time column to be accurate without a weird date
 
@@ -169,14 +170,15 @@ all_trans_b_sum <- trans_b_swe_avg %>%
   select(point_name, date, avg_depth_cm, avg_dens_tube, avg_swe_tube, avg_dens_wedge, avg_swe_wedge)
 
 trans_b_temp <- read_excel("nsf/nsf_snow_transects/trans_b_ab.xlsx", sheet = "temp") %>%
-  mutate(date = ymd(date, tz = 'MST'))
+  mutate(date = format(as_date(date), "%Y-%m-%d")) %>%
+  mutate(time = format(as.POSIXct(time, format = "%H:%M:%S"),"%H:%M:%S"))
 ```
 
 ```{r}
 #read in ub data and seperate into depths and pit measurements
 trans_ub_depth <- read_excel("nsf/nsf_snow_transects/trans_ub_ag.xlsx") %>%
   select(1:7) %>%
-  mutate(date = ymd(date, tz = 'MST'))
+  mutate(date = format(as_date(date), "%Y-%m-%d"))
 
 ## average across for depths by point id
 trans_ub_depths_avg <- trans_ub_depth %>%
@@ -190,7 +192,7 @@ trans_ub_depths_avg <- trans_ub_depth %>%
   select(-c(3:7))
 
 trans_ub_swe <- read_excel("nsf/nsf_snow_transects/trans_ub_ag.xlsx", sheet = "swe") %>%
-  mutate(date = ymd(date, tz = 'MST'))
+  mutate(date = format(as_date(date), "%Y-%m-%d"))
 #this is wedge and swe tube combined
 #still need to get time column to be accurate without a weird date
 
@@ -214,7 +216,7 @@ all_trans_ub_sum <- trans_ub_swe_avg %>%
   select(point_name, date, avg_depth_cm, avg_dens_tube, avg_swe_tube, avg_dens_wedge, avg_swe_wedge)
 
 trans_ub_temp <- read_excel("nsf/nsf_snow_transects/trans_ub_ag.xlsx", sheet = "temp") %>%
-  mutate(date = ymd(date, tz = 'MST'))
+  mutate(date = format(as_date(date), "%Y-%m-%d"))
 ```
 
 ```{r}
@@ -236,7 +238,8 @@ avg_all_trans_depths <- trans_b_depths_avg %>%
     str_detect(point_name, fixed("ab", ignore_case = TRUE)) ~ "burned",
     TRUE ~ NA_character_  # Add a default value if needed
   )) %>%
-  select(point_name, date, burn, everything())
+  select(point_name, date, burn, everything()) %>%
+  mutate(date = format(as_date(date), "%Y-%m-%d"))
 
 all_trans_swe <- trans_b_swe %>%
   full_join(trans_ub_swe) %>%
@@ -245,7 +248,10 @@ all_trans_swe <- trans_b_swe %>%
   str_detect(point_name, fixed("ab", ignore_case = TRUE)) ~ "burned",
   TRUE ~ NA_character_  # Add a default value if needed
   )) %>%
-  select(point_name, date, burn, everything())
+  select(point_name, date, burn, everything()) %>%
+  #removing strange dates from obs_time column
+  mutate(snowcore_obs_time = format(as.POSIXct(snowcore_obs_time, format = "%H:%M:%S"), "%H:%M:%S")) %>%
+  mutate(date = format(as.Date(date), "%Y-%m-%d"))
 
 avg_all_trans_swe <- trans_b_swe_avg %>%
   full_join(trans_ub_swe_avg) %>%
@@ -254,7 +260,11 @@ avg_all_trans_swe <- trans_b_swe_avg %>%
     str_detect(point_name, fixed("ab", ignore_case = TRUE)) ~ "burned",
     TRUE ~ NA_character_  # Add a default value if needed
   )) %>%
-  select(point_name, date, burn, everything())
+  select(point_name, date, burn, everything()) %>%
+  #removing strange dates from obs_time column
+  mutate(snowcore_obs_time = format(as.POSIXct(snowcore_obs_time, format = "%H:%M:%S"), "%H:%M:%S")) %>%
+  mutate(date = format(as.Date(date), "%Y-%m-%d"))
+
 
 all_trans_temps <- trans_b_temp %>%
   full_join(trans_ub_temp) %>%
@@ -263,7 +273,9 @@ all_trans_temps <- trans_b_temp %>%
     str_detect(point_name, fixed("ab", ignore_case = TRUE)) ~ "burned",
     TRUE ~ NA_character_  # Add a default value if needed
   )) %>%
-  select(point_name, date, burn, everything())
+  select(point_name, date, burn, everything()) %>%
+  #removing strange dates from time column
+  mutate(time = format(as.POSIXct(time, format = "%H:%M:%S"), "%H:%M:%S"))
 ```
 
 ```{r}
@@ -377,4 +389,20 @@ ggplot(all_trans_sum, aes(x=as.factor(month), y=swe, fill=burn)) +
 
 ggsave(paste(PLOT,".png",sep=""), width = PlotWidth, height = PlotHeight)
 
+```
+
+### Final annual combined csv
+
+```{r}
+library(readxl)
+#creating dataframe
+transitional_snow_survey_2024 <- all_trans_depths %>%
+  full_join(avg_all_trans_swe) %>%
+  select(date, snowcore_obs_time, point_name, burn, everything()) %>%
+  left_join(geode_all, by = "point_name") %>%
+  select(-geoid_offset) %>%
+  mutate(date = format(as_date(date), "%Y-%m-%d"))
+
+#exporting as csv
+write_csv(transitional_snow_survey_2024, "nsf/nsf_snow_transects/transitional/transitional_snow_survey_2024.csv")
 ```
