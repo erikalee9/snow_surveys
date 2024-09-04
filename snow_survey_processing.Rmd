@@ -20,8 +20,6 @@ library(ggplot2)
 library(stringr)
 library(readxl)
 library(rstatix)
-library(sf)
-library(terra)
 library(dplyr)
 library(readr)
 
@@ -161,9 +159,10 @@ trans_b_swe_avg <- trans_b_swe %>%
   mutate(avg_dens_tube = mean(c(density1_gcm3, density2_gcm3, density3_gcm3))) %>%
   mutate(avg_swe_tube = mean(c(swe1_cm...13, swe2_cm...18, swe3_cm...23))) %>%
   mutate(avg_dens_wedge = mean(c(wedge1_density_gcm3, wedge2_density_gcm3, wedge3_density_gcm3, wedge4_density_gcm3, wedge5_density_gcm3, wedge6_density_gcm3, wedge7_density_gcm3))) %>%
-  mutate(avg_swe_wedge = mean(c(swe1_cm...30, swe2_cm...36, swe3_cm...42, swe3_cm...42, swe5_cm, swe6_cm, swe7_cm))) %>%
+  mutate(avg_swe_wedge = total_swe_cm) %>%
   #selecting just the averages
-    select(1:3, avg_depth_cm, avg_dens_tube, avg_swe_tube, avg_dens_wedge, avg_swe_wedge)
+    select(1:3, avg_depth_cm, avg_dens_tube, avg_swe_tube, avg_dens_wedge, avg_swe_wedge, total_swe_cm)
+
   
 #get rid of stuff we don't care about right now
 all_trans_b_sum <- trans_b_swe_avg %>%
@@ -399,10 +398,12 @@ library(readxl)
 transitional_snow_survey_2024 <- all_trans_depths %>%
   full_join(avg_all_trans_swe) %>%
   select(date, snowcore_obs_time, point_name, burn, everything()) %>%
+  #adding a MST to the snowcore obs column title
+  rename(snowcore_obs_time_MST = snowcore_obs_time) %>%
   left_join(geode_all, by = "point_name") %>%
   select(-geoid_offset) %>%
   mutate(date = format(as_date(date), "%Y-%m-%d"))
 
 #exporting as csv
-write_csv(transitional_snow_survey_2024, "nsf/nsf_snow_transects/transitional/transitional_snow_survey_2024.csv")
+write_csv(transitional_snow_survey_2024, "nsf/nsf_snow_transects/transitional/transitional_snow_survey_2024.csv", na = "")
 ```
